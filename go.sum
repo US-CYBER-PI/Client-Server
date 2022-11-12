@@ -1,7 +1,7 @@
-github.com/US-CYBER-PI/qiwi-bill-paymentsgo-sdk v0.0.0-20221112150055-d0edfd5cf507 h1:xvG/kUifRspIS9qoVXTPGPQyYUw4b/8oII5i8OngV+g=
-github.com/US-CYBER-PI/qiwi-bill-paymentsgo-sdk v0.0.0-20221112150055-d0edfd5cf507/go.mod h1:vWRHZA2rZUJb90Ycd0+xehDqMnH0+eXkpYqLf70sdcA=
-github.com/US-CYBER-PI/qiwi-bill-paymentsgo-sdk v0.0.0-20221112173626-917081f82782 h1:kVlL5UsgaigeTsQwxB153G9F+DT0z0p9MctXfRd4fRw=
-github.com/US-CYBER-PI/qiwi-bill-paymentsgo-sdk v0.0.0-20221112173626-917081f82782/go.mod h1:vWRHZA2rZUJb90Ycd0+xehDqMnH0+eXkpYqLf70sdcA=
+github.com/US-CYBER-PI/qiwi-bill-paymentsgo-sdk v0.0.0-20221112185208-c24053b09a28 h1:PQQDPotNMJ5EvEu4jVGS03YCjCT3STiCqZLQXimJNRM=
+github.com/US-CYBER-PI/qiwi-bill-paymentsgo-sdk v0.0.0-20221112185208-c24053b09a28/go.mod h1:vWRHZA2rZUJb90Ycd0+xehDqMnH0+eXkpYqLf70sdcA=
+github.com/golang-jwt/jwt v3.2.2+incompatible h1:IfV12K8xAKAnZqdXVzCZ+TOjboZ2keLg81eXfW3O+oY=
+github.com/golang-jwt/jwt v3.2.2+incompatible/go.mod h1:8pz2t5EyA70fFQQSrl6XZXzqecmYZeUEB8OUGHkxJ+I=
 github.com/joho/godotenv v1.4.0 h1:3l4+N6zfMWnkbPEXKng2o2/MR5mSwTrBih4ZEkkz1lg=
 github.com/joho/godotenv v1.4.0/go.mod h1:f4LDr5Voq0i2e/R5DDNOoa2zzDfwtkZa6DnEwAbqwq4=
 github.com/lib/pq v1.10.7 h1:p7ZhMD+KsSRozJr34udlUrhboJwWAgCg34+/ZZNvZZw=

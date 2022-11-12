@@ -32,13 +32,13 @@ func NewUserRepositoryPG(host, port, user, password, dbname string) (*UserReposi
 	}
 	return &UserRepositoryPG{
 		db:               db,
-		queryInsertUser:  "insert into users(phone,password,role_id) values ($1,$2,1);",
+		queryInsertUser:  "insert into users(phone,password,role_id) values ($1,$2,1) RETURNING id;",
 		queryUpdateUser:  "UPDATE users SET token_id = $1 WHERE id = $2",
 		queryUser:        "SELECT id, phone, token_id FROM users WHERE id = $1",
 		queryCheck:       "select id from users WHERE phone = $1;",
 		queryToken:       "select id,status,expired_date,token from tokens WHERE id = $1",
-		queryCreateToken: "insert into tokens(status,expired_date,token) values (0,now(),'') RETURNING id;",
-		queryUpdateToken: "UPDATE tokens SET status = 1, expired_date=$1, token=$2  WHERE id = $3",
+		queryCreateToken: "insert into tokens(status,expired_date,token) values (false, now(),'') RETURNING id;",
+		queryUpdateToken: "UPDATE tokens SET status = true, expired_date=$1, token=$2  WHERE id = $3",
 	}, nil
 }
 
@@ -73,7 +73,7 @@ func (u *UserRepositoryPG) CreateToken(userId int) (*models.Token, error) {
 
 func (u *UserRepositoryPG) UpdateToken(expiredDate time.Time, token string, tokenId int) (*models.Token, error) {
 
-	err := u.db.QueryRow(u.queryUpdateToken, expiredDate, tokenId).Scan(&tokenId)
+	_, err := u.db.Exec(u.queryUpdateToken, expiredDate, token, tokenId)
 
 	if err != nil {
 		return nil, err
@@ -101,11 +101,24 @@ func (u *UserRepositoryPG) CheckOccupancyPhone(phone string) bool {
 }
 
 func (u *UserRepositoryPG) UserRegistration(phone, passwords string) bool {
+
+	var userId int
+
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(passwords), bcrypt.DefaultCost)
 	if err != nil {
 		return false
 	}
-	u.db.QueryRow(u.queryInsertUser, phone, hashedPassword)
+
+	err = u.db.QueryRow(u.queryInsertUser, phone, hashedPassword).Scan(&userId)
+	if err != nil {
+		return false
+	}
+
+	_, err = u.CreateToken(userId)
+	if err != nil {
+		return false
+	}
+
 	return true
 }
 

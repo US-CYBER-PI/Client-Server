@@ -8,6 +8,7 @@ import (
 	"fmt"
 	qiwiSdk "github.com/US-CYBER-PI/qiwi-bill-paymentsgo-sdk/src"
 	"github.com/US-CYBER-PI/qiwi-bill-paymentsgo-sdk/src/Models"
+	"github.com/golang-jwt/jwt"
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 	"log"
@@ -109,15 +110,15 @@ func RegUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	phone := r.FormValue("phone")
-	passwords := r.FormValue("password")
+	password := r.FormValue("password")
 
-	if phone == "" || passwords == "" {
+	if phone == "" || password == "" {
 		http.Error(w, "", http.StatusBadRequest)
 		return
 	}
 
 	if !userRepository.CheckOccupancyPhone(phone) {
-		result := userRepository.UserRegistration(phone, passwords)
+		result := userRepository.UserRegistration(phone, password)
 		if !result {
 			http.Error(w, "", http.StatusBadGateway)
 			return
@@ -142,25 +143,32 @@ func PayToken(w http.ResponseWriter, r *http.Request) {
 
 	id, _ := strconv.Atoi(r.Header.Get("User-Id"))
 
-	token, err := userRepository.CreateToken(id)
-	if err != nil {
-		return
-	}
-
 	user := userRepository.GetUserById(id)
 	if user == nil {
+		http.Error(w, "", http.StatusBadGateway)
 		return
 	}
 
-	qiwiClient.GeneratePayToken(Models.GeneratePayToken{
-		RequestId: strconv.Itoa(token.Id),
-		Phone:     user.Phone,
-		AccountId: strconv.Itoa(user.Id),
-	})
+	originalToken, _ := userRepository.GetTokenById(user.TokenId)
 
-	w.Header().Set("Content-Type", "application/json")
-	http.Error(w, `{"message": "success"}`, http.StatusTooEarly)
-	return
+	if !originalToken.Status {
+		token, err := userRepository.CreateToken(id)
+		if err != nil {
+			http.Error(w, "", http.StatusBadGateway)
+			return
+		}
+
+		qiwiClient.GeneratePayToken(Models.GeneratePayToken{
+			RequestId: strconv.Itoa(token.Id),
+			Phone:     user.Phone,
+			AccountId: strconv.Itoa(user.Id),
+		})
+
+		w.Header().Set("Content-Type", "application/json")
+		http.Error(w, `{"message": "success"}`, http.StatusTooEarly)
+		return
+	}
+
 	//var tokenR, err = userRepository.GetTokenById(id)
 	//
 	//if err != nil {
@@ -175,20 +183,19 @@ func PayToken(w http.ResponseWriter, r *http.Request) {
 	//	return err
 	//}
 	//
-	//token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-	//	"id":  id,
-	//	"key": strconv.FormatInt(time.Now().Unix(), 10) + id,
-	//	"exp": time.Now().Add(5 * time.Minute).Unix(),
-	//})
-	//_, _ = token.SignedString(hmacSecret)
-	//
-	//w.Header().Set("Content-Type", "application/json")
-	//_ = json.NewEncoder(w).Encode(map[string]interface{}{
-	//	"token":       0,
-	//	"expiredDate": "string",
-	//})
-	//
-	//return nil
+	exp := time.Now().Add(5 * time.Minute).Unix()
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"id":  id,
+		"key": fmt.Sprintf("%d|%d", time.Now().Unix(), id),
+		"exp": exp,
+	})
+	tokenString, _ := token.SignedString(hmacSecret)
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"token":       tokenString,
+		"expiredDate": exp,
+	})
 }
 
 func PayTokenStatus(w http.ResponseWriter, r *http.Request) {
@@ -242,26 +249,31 @@ func PhoneSms(w http.ResponseWriter, r *http.Request) {
 		SmsCode:   code,
 	})
 
-	if resp.Status != "SUCCESS" {
-		http.Error(w, "", http.StatusUnprocessableEntity)
+	f, err := json.Marshal(resp)
+	if resp.Status.Value != "CREATED" {
+		http.Error(w, string(f), http.StatusUnprocessableEntity)
 		return
 	}
 
-	layout := "2006-01-02T15:04:05.000Z"
-	t, err := time.Parse(layout, resp.TokenExpiredDate)
+	layout := "2006-01-02T15:04:05"
+	t, err := time.Parse(layout, resp.TokenValue.TokenExpiredDate[:19])
 
 	if err != nil {
-		http.Error(w, "", http.StatusBadGateway)
+		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 
-	_, _ = userRepository.UpdateToken(t, resp.Status, user.TokenId)
+	_, err = userRepository.UpdateToken(t, resp.TokenValue.TokenValue, user.TokenId)
 
 	if err != nil {
-		http.Error(w, "", http.StatusBadGateway)
+		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"mes": "successfully",
+	})
 	return
 }
 
