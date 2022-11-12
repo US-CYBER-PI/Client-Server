@@ -130,3 +130,20 @@ func (u *UserRepositoryPG) GetUserById(id int) *models.User {
 	}
 	return &user
 }
+
+func (u *UserRepositoryPG) GetPaymentByKey(key string) *models.Payment {
+	var payment models.Payment
+	err := u.db.QueryRow("SELECT id, amount, user_id, status, pay_token_identifier FROM payments WHERE pay_token_identifier = $1", key).Scan(&payment.ID, &payment.Amount, &payment.UserID, &payment.Status, &payment.PayTokenIdentifier)
+	if err != nil {
+		return nil
+	}
+	return &payment
+}
+
+func (u *UserRepositoryPG) UpdatePaymentStatus(id int, status string) bool {
+	_, err := u.db.Exec("UPDATE payments SET status = $1 WHERE id = $2", status, id)
+	if err != nil {
+		return false
+	}
+	return true
+}

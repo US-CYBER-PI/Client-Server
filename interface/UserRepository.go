@@ -17,4 +17,8 @@ type UserRepository interface {
 	UserRegistration(phone, passwords string) bool
 
 	GetUserById(id int) *models.User
+
+	GetPaymentByKey(key string) *models.Payment
+
+	UpdatePaymentStatus(id int, status string) bool
 }

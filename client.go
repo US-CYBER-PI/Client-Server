@@ -3,6 +3,7 @@ package main
 import (
 	_interface "ClientServer/interface"
 	"ClientServer/repositories"
+	"ClientServer/utils"
 	_ "database/sql"
 	"encoding/json"
 	"fmt"
@@ -15,7 +16,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -25,16 +25,13 @@ var (
 	pgHost         = "localhost"
 	pgPort         = "5432"
 	pgDB           = "jwt"
-	pgUserTable    = "users"
-	pgLoginField   = "login"
-	pgRoleTable    = "roles"
-	pgRoleIdField  = "role_id"
 	userRepository _interface.UserRepository
-	qiwiToken      = "9f69ff96-d505-4ed1-84e2-f678867a5c23"
-	qiwiSiteId     = "sa3khn-02"
+	qiwiToken      = "8f69ff16-d505-1ed1-84e3-f677467a5c23"
+	qiwiSiteId     = "sa4kjn-12"
 	qiwiClient     qiwiSdk.Client
-	hmacSecret     = []byte("c4bd7d88edb4fa1817abb11707958924384f7933e5facfd707dc1d1429af9936")
+	hmacSecret     = []byte("c3bd7d88edb4fa1817abb11702158924384f7933e5facfd707dc1d1429af9931")
 	port           = 9096
+	jwtManager     *utils.JwtManager
 )
 
 func init() {
@@ -87,6 +84,8 @@ func main() {
 
 	var err error
 
+	jwtManager = utils.NewJwtManager(hmacSecret)
+
 	qiwiClient = *qiwiSdk.NewClient(qiwiToken, "https://api.qiwi.com/partner", qiwiSiteId)
 
 	userRepository, err = repositories.NewUserRepositoryPG(pgHost, pgPort, pgUser, pgPassword, pgDB)
@@ -97,9 +96,8 @@ func main() {
 
 	http.HandleFunc("/api/v1/auth/reg", RegUser)
 	http.HandleFunc("/api/v1/user/pay_token", PayToken)
-	//http.HandleFunc("/api/v1/user/pay_token/status", PayTokenStatus)
 	http.HandleFunc("/api/v1/user/phone/sms", PhoneSms)
-	//http.HandleFunc("/api/v1/user/pay", Pay)
+	http.HandleFunc("/api/v1/user/pay_token/status", PayStatus)
 	_ = http.ListenAndServe(fmt.Sprintf(":%d", port), nil)
 }
 
@@ -169,20 +167,6 @@ func PayToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//var tokenR, err = userRepository.GetTokenById(id)
-	//
-	//if err != nil {
-	//	return nil
-	//}
-
-	//var datebd string
-	//t, _ := time.Parse(tokenR.ExpiredDate, datebd)
-	//t2 := time.Now()
-	//dur := t2.Sub(t)
-	//if dur*time.Hour > 24 {
-	//	return err
-	//}
-	//
 	exp := time.Now().Add(5 * time.Minute).Unix()
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"id":  id,
@@ -198,28 +182,43 @@ func PayToken(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func PayTokenStatus(w http.ResponseWriter, r *http.Request) {
+func PayStatus(w http.ResponseWriter, r *http.Request) {
 
-	//if r.Method != http.MethodPost {
-	//	http.Error(w, "", http.StatusMethodNotAllowed)
-	//	return
-	//}
-	//
-	//id := r.FormValue("id")
-	//amount := r.FormValue("amount")
-	//status := r.FormValue("status")
-	//
-	//if id == "" || amount == "" || status == "" {
-	//	http.Error(w, "", http.StatusBadRequest)
-	//	return
-	//}
-	//var re Repository.UserRepositoryPG
-	//
-	//_, err := re.UserRegistration(id, token, expresion)
-	//if err != nil {
-	//	http.Error(w, "", http.StatusForbidden)
-	//	return
-	//}
+	userPayToken := r.FormValue("user_pay_token")
+
+	if userPayToken == "" {
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+
+	claim := jwtManager.GetTokenClaim(userPayToken)
+
+	if claim == nil {
+		http.Error(w, "", http.StatusBadRequest)
+		return
+	}
+
+	payment := userRepository.GetPaymentByKey((*claim)["key"].(string))
+
+	if payment == nil {
+		http.Error(w, "", http.StatusNotFound)
+		return
+	}
+
+	if payment.Status != "COMPLETED" {
+		resp := qiwiClient.GetPayment(strconv.Itoa(payment.ID))
+		if payment.Status != resp.Status.Value {
+			userRepository.UpdatePaymentStatus(payment.ID, resp.Status.Value)
+			payment.Status = resp.Status.Value
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"id":     payment.ID,
+		"amount": payment.Amount,
+		"status": payment.Status,
+	})
 }
 
 func PhoneSms(w http.ResponseWriter, r *http.Request) {
@@ -275,34 +274,4 @@ func PhoneSms(w http.ResponseWriter, r *http.Request) {
 		"mes": "successfully",
 	})
 	return
-}
-
-func Pay(w http.ResponseWriter, r *http.Request) {
-	//w.Header().Set("Content-Type", "application/json")
-	//
-	//_ = json.NewEncoder(w).Encode(map[string]interface{}{
-	//	"message": tokenString,
-	//})
-	//http.Error(w, "", http.StatusMethodNotAllowed)
-	//return
-}
-
-func getToken(r *http.Request) (string, int) {
-
-	if r.Method != http.MethodPost {
-		return "", http.StatusMethodNotAllowed
-	}
-
-	token := r.Header.Get("Authorization")
-
-	if token == "" {
-		return "", http.StatusUnauthorized
-	}
-	extractedToken := strings.Split(token, "Bearer ")
-
-	if len(extractedToken) < 2 {
-		return "", http.StatusUnauthorized
-	}
-
-	return extractedToken[1], http.StatusOK
 }
