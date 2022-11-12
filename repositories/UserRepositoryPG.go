@@ -5,13 +5,18 @@ import (
 	"database/sql"
 	"fmt"
 	"golang.org/x/crypto/bcrypt"
+	"time"
 )
 
 type UserRepositoryPG struct {
-	db           *sql.DB
-	queryUserRow string
-	queryCheck   string
-	queryToken   string
+	db               *sql.DB
+	queryInsertUser  string
+	queryUpdateUser  string
+	queryUser        string
+	queryCheck       string
+	queryToken       string
+	queryCreateToken string
+	queryUpdateToken string
 }
 
 func NewUserRepositoryPG(host, port, user, password, dbname string) (*UserRepositoryPG, error) {
@@ -26,29 +31,68 @@ func NewUserRepositoryPG(host, port, user, password, dbname string) (*UserReposi
 		return nil, err
 	}
 	return &UserRepositoryPG{
-		db:           db,
-		queryUserRow: "insert into users(phone,password,role_id) values ($1,$2,1);",
-		queryCheck:   "select id from users WHERE phone = $1;",
-		queryToken:   "select id,status,expired_date,token from tokens WHERE id = $1",
+		db:               db,
+		queryInsertUser:  "insert into users(phone,password,role_id) values ($1,$2,1);",
+		queryUpdateUser:  "UPDATE users SET token_id = $1 WHERE id = $2",
+		queryUser:        "SELECT id, phone, token_id FROM users WHERE id = $1",
+		queryCheck:       "select id from users WHERE phone = $1;",
+		queryToken:       "select id,status,expired_date,token from tokens WHERE id = $1",
+		queryCreateToken: "insert into tokens(status,expired_date,token) values (0,now(),'') RETURNING id;",
+		queryUpdateToken: "UPDATE tokens SET status = 1, expired_date=$1, token=$2  WHERE id = $3",
 	}, nil
 }
 
-func (r *UserRepositoryPG) GetTokenById(id int) (*models.Token, error) {
+func (u *UserRepositoryPG) GetTokenById(id int) (*models.Token, error) {
 
 	var token models.Token
 
-	err := r.db.QueryRow(r.queryToken, id).Scan(&token.Id, &token.Status, &token.ExpiredDate, &token.Token)
+	err := u.db.QueryRow(u.queryToken, id).Scan(&token.Id, &token.Status, &token.ExpiredDate, &token.Token)
 	if err != nil {
 		return nil, err
 	}
 	return &token, nil
 }
 
-func (r *UserRepositoryPG) CheckOccupancyPhone(phone string) bool {
+func (u *UserRepositoryPG) CreateToken(userId int) (*models.Token, error) {
+
+	var tokenId int
+
+	err := u.db.QueryRow(u.queryCreateToken).Scan(&tokenId)
+
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = u.db.Exec(u.queryUpdateUser, tokenId, userId)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.Token{Id: tokenId}, nil
+}
+
+func (u *UserRepositoryPG) UpdateToken(expiredDate time.Time, token string, tokenId int) (*models.Token, error) {
+
+	err := u.db.QueryRow(u.queryUpdateToken, expiredDate, tokenId).Scan(&tokenId)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.Token{
+		Id:          tokenId,
+		ExpiredDate: expiredDate,
+		Token:       token,
+		Status:      true,
+	}, nil
+
+}
+
+func (u *UserRepositoryPG) CheckOccupancyPhone(phone string) bool {
 
 	var user models.User
 
-	err := r.db.QueryRow(r.queryCheck, phone).Scan(&user.Id)
+	err := u.db.QueryRow(u.queryCheck, phone).Scan(&user.Id)
 	if err != nil {
 		return false
 	}
@@ -56,11 +100,20 @@ func (r *UserRepositoryPG) CheckOccupancyPhone(phone string) bool {
 	return true
 }
 
-func (r *UserRepositoryPG) UserRegistration(phone, passwords string) bool {
+func (u *UserRepositoryPG) UserRegistration(phone, passwords string) bool {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(passwords), bcrypt.DefaultCost)
 	if err != nil {
 		return false
 	}
-	r.db.QueryRow(r.queryUserRow, phone, hashedPassword)
+	u.db.QueryRow(u.queryInsertUser, phone, hashedPassword)
 	return true
+}
+
+func (u *UserRepositoryPG) GetUserById(id int) *models.User {
+	var user models.User
+	err := u.db.QueryRow(u.queryUser, id).Scan(&user.Id, &user.Phone, &user.TokenId)
+	if err != nil {
+		return nil
+	}
+	return &user
 }

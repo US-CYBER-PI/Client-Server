@@ -1,7 +1,7 @@
 package models
 
 type User struct {
-	Id        int32
+	Id        int
 	Phone     string
 	Passwords string
 	RoleId    int
