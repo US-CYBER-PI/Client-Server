@@ -1,9 +1,9 @@
-package Models
+package models
 
 type User struct {
 	Id        int32
 	Phone     string
 	Passwords string
-	Role_id   int
-	Token_id  int
+	RoleId    int
+	TokenId   int
 }

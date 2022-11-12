@@ -1,20 +1,20 @@
-package Repository
+package repositories
 
 import (
+	"ClientServer/models"
 	"database/sql"
 	"fmt"
 	"golang.org/x/crypto/bcrypt"
-	"qiwi-clients/Models"
 )
 
 type UserRepositoryPG struct {
 	db           *sql.DB
 	queryUserRow string
-	queryCheak   string
+	queryCheck   string
 	queryToken   string
 }
 
-func ConnectionDB(host, port, user, password, dbname string) (*UserRepositoryPG, error) {
+func NewUserRepositoryPG(host, port, user, password, dbname string) (*UserRepositoryPG, error) {
 
 	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable", host, port, user, password, dbname)
 	db, err := sql.Open("postgres", connStr)
@@ -28,23 +28,23 @@ func ConnectionDB(host, port, user, password, dbname string) (*UserRepositoryPG,
 	return &UserRepositoryPG{
 		db:           db,
 		queryUserRow: "insert into user(phone,passwords,role_id) values ($1,$2,1);",
-		queryCheak:   "select id,phone,passwords,role_id,token_id from users WHERE phone = $1;",
+		queryCheck:   "select id from users WHERE phone = $1;",
 		queryToken:   "select id,status,expired_date,token from tokens WHERE id = $1",
 	}, nil
 }
 
-func (r *UserRepositoryPG) GetTokenbyId(id int) (*Models.Token, error) {
+func (r *UserRepositoryPG) GetTokenById(id int) (*models.Token, error) {
 
-	var Token_ Models.Token
+	var token models.Token
 
-	err := r.db.QueryRow(r.queryToken, id).Scan(&Token_.Id, &Token_.Status, &Token_.Expired_date, &Token_.Token)
+	err := r.db.QueryRow(r.queryToken, id).Scan(&token.Id, &token.Status, &token.ExpiredDate, &token.Token)
 	if err != nil {
 		return nil, err
 	}
-	return &Token_, nil
+	return &token, nil
 }
 
-func (r *UserRepositoryPG) CheakUserRegistation(phone string) bool {
+func (r *UserRepositoryPG) CheckOccupancyPhone(phone string) bool {
 
 	err := r.db.QueryRow(r.queryUserRow, phone).Err()
 	if err != nil {
@@ -54,15 +54,11 @@ func (r *UserRepositoryPG) CheakUserRegistation(phone string) bool {
 	return true
 }
 
-func (r *UserRepositoryPG) UserRegistration(phone, passwords string) (*Models.User, error) {
-
-	var user Models.User
-
+func (r *UserRepositoryPG) UserRegistration(phone, passwords string) bool {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(passwords), bcrypt.DefaultCost)
 	if err != nil {
-		panic(err)
+		return false
 	}
-	fmt.Println(string(hashedPassword))
 	r.db.QueryRow(r.queryUserRow, phone, hashedPassword)
-	return &user, nil
+	return true
 }
