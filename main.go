@@ -6,8 +6,12 @@ import (
 	_ "database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
+	"log"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 )
 
@@ -26,17 +30,49 @@ var (
 	port           = 9096
 )
 
-type Token struct {
-	token  string
-	host   string
-	siteId string
+func init() {
+
+	err := godotenv.Load(".env")
+
+	if err != nil {
+		log.Println("Error loading .env file")
+	}
+
+	if os.Getenv("PG_USER") != "" {
+		pgUser = os.Getenv("PG_USER")
+	}
+
+	if os.Getenv("PG_PASSWORD") != "" {
+		pgPassword = os.Getenv("PG_PASSWORD")
+	}
+
+	if os.Getenv("PG_HOST") != "" {
+		pgHost = os.Getenv("PG_HOST")
+	}
+
+	if os.Getenv("PG_PORT") != "" {
+		pgPort = os.Getenv("PG_PORT")
+	}
+
+	if os.Getenv("PG_DB") != "" {
+		pgDB = os.Getenv("PG_DB")
+	}
+
+	if os.Getenv("PORT") != "" {
+		port, _ = strconv.Atoi(os.Getenv("PORT"))
+	}
+
+	if os.Getenv("HMAC_SECRET") != "" {
+		hmacSecret = []byte(os.Getenv("HMAC_SECRET"))
+	}
+
 }
 
 func main() {
 
 	var err error
 
-	userRepository, err = repositories.NewUserRepositoryPG(pgUser, pgPassword, pgHost, pgPort, pgDB)
+	userRepository, err = repositories.NewUserRepositoryPG(pgHost, pgPort, pgUser, pgPassword, pgDB)
 
 	if err != nil {
 		panic(err)
@@ -57,7 +93,7 @@ func RegUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	phone := r.FormValue("phone")
-	passwords := r.FormValue("passwords")
+	passwords := r.FormValue("password")
 
 	if phone == "" || passwords == "" {
 		http.Error(w, "", http.StatusBadRequest)
@@ -75,6 +111,7 @@ func RegUser(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"mes": "successfully",
 		})
+		return
 	}
 
 	http.Error(w, "", http.StatusUnprocessableEntity)

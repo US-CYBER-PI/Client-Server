@@ -27,7 +27,7 @@ func NewUserRepositoryPG(host, port, user, password, dbname string) (*UserReposi
 	}
 	return &UserRepositoryPG{
 		db:           db,
-		queryUserRow: "insert into user(phone,passwords,role_id) values ($1,$2,1);",
+		queryUserRow: "insert into users(phone,password,role_id) values ($1,$2,1);",
 		queryCheck:   "select id from users WHERE phone = $1;",
 		queryToken:   "select id,status,expired_date,token from tokens WHERE id = $1",
 	}, nil
@@ -46,7 +46,9 @@ func (r *UserRepositoryPG) GetTokenById(id int) (*models.Token, error) {
 
 func (r *UserRepositoryPG) CheckOccupancyPhone(phone string) bool {
 
-	err := r.db.QueryRow(r.queryUserRow, phone).Err()
+	var user models.User
+
+	err := r.db.QueryRow(r.queryCheck, phone).Scan(&user.Id)
 	if err != nil {
 		return false
 	}
