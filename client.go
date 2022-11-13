@@ -149,7 +149,7 @@ func PayToken(w http.ResponseWriter, r *http.Request) {
 
 	originalToken, _ := userRepository.GetTokenById(user.TokenId)
 
-	if !originalToken.Status {
+	if !originalToken.Status || !originalToken.ExpiredDate.After(time.Now().AddDate(0, 0, 3)) {
 		token, err := userRepository.CreateToken(id)
 		if err != nil {
 			http.Error(w, "", http.StatusBadGateway)
